@@ -1,0 +1,23 @@
+# -----------------------------------------------------------------------------
+# terraform.tfvars.example
+#
+# Modelo de valores para as variáveis. Para usar:
+#   cp terraform.tfvars.example terraform.tfvars
+# e edite o terraform.tfvars (ele está no .gitignore e NÃO vai para o Git).
+#
+# Nunca coloque credenciais da AWS aqui: elas ficam em ~/.aws/credentials.
+# -----------------------------------------------------------------------------
+
+project_name = "webapp"
+environment  = "dev"
+aws_region   = "us-east-1"
+
+vpc_cidr      = "10.0.0.0/16"
+instance_type = "t3.micro"
+
+# Seu IP público com /32 (descubra em https://checkip.amazonaws.com).
+allowed_ssh_cidr = "203.0.113.10/32"
+
+# Recursos que já existem no AWS Academy Learner Lab.
+key_name              = "vockey"
+instance_profile_name = "LabInstanceProfile"

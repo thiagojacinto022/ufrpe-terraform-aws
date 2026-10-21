@@ -1,0 +1,40 @@
+# Diretório de trabalho do Terraform (providers e módulos baixados no init).
+.terraform/
+
+# State e backups: contêm IDs e às vezes dados sensíveis da infraestrutura.
+*.tfstate
+*.tfstate.*
+
+# Arquivos de variáveis podem ter dados pessoais (meu IP) ou segredos.
+# O exemplo sem valores sensíveis continua versionado.
+*.tfvars
+*.tfvars.json
+!terraform.tfvars.example
+
+# Planos salvos com `terraform plan -out` (são binários e contêm valores).
+*.tfplan
+
+# Logs de crash do Terraform.
+crash.log
+crash.*.log
+
+# Overrides locais, usados só na máquina de cada um.
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Configs da CLI do Terraform.
+.terraformrc
+terraform.rc
+
+# Credenciais e chaves: NUNCA devem ir para o repositório.
+.aws/
+credentials
+*.pem
+*.key
+.env
+
+# Obs.: o .terraform.lock.hcl NÃO está aqui de propósito. Ele registra as
+# versões exatas (e hashes) dos providers e deve ser versionado, para que
+# todos usem exatamente o mesmo provider.
