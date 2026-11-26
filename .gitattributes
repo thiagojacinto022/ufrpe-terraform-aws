@@ -5,3 +5,7 @@ Dockerfile text eol=lf
 *.py text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+*.tf text eol=lf
+*.tftpl text eol=lf
+*.hcl text eol=lf
+*.tfvars.example text eol=lf
