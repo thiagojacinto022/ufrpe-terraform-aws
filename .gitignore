@@ -35,6 +35,13 @@ credentials
 *.key
 .env
 
+# Python: ambiente virtual e caches locais.
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
 # Obs.: o .terraform.lock.hcl NÃO está aqui de propósito. Ele registra as
 # versões exatas (e hashes) dos providers e deve ser versionado, para que
 # todos usem exatamente o mesmo provider.

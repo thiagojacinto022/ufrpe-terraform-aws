@@ -1,0 +1,47 @@
+name: termo
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: termo
+      POSTGRES_USER: termo
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?defina DB_PASSWORD no .env ou via infisical run}
+    volumes:
+      - dados-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U termo -d termo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./app/backend
+    image: termo-backend:local
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: termo
+      DB_USER: termo
+      DB_PASSWORD: ${DB_PASSWORD:?defina DB_PASSWORD no .env ou via infisical run}
+      TOKEN_SECRET: ${TOKEN_SECRET:?defina TOKEN_SECRET no .env ou via infisical run}
+      LOG_LEVEL: INFO
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build: ./app/frontend
+    image: termo-frontend:local
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  dados-postgres:

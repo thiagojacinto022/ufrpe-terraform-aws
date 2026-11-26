@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Termo UFRPE</title>
+  <link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+  <header class="topo">
+    <h1>Termo</h1>
+    <div class="sessao">
+      <span id="jogador-atual"></span>
+      <button id="botao-sair" type="button" hidden>Sair</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="tela-entrada" class="cartao">
+      <p>Descubra a palavra de 5 letras em até 6 tentativas.</p>
+      <form id="form-entrada">
+        <label for="apelido">Apelido</label>
+        <input id="apelido" name="apelido" autocomplete="nickname" required
+               minlength="3" maxlength="20" pattern="[A-Za-z0-9_]{3,20}"
+               title="De 3 a 20 letras, números ou _">
+        <button type="submit">Jogar</button>
+      </form>
+    </section>
+
+    <section id="tela-jogo" hidden>
+      <div id="tabuleiro" class="tabuleiro" aria-label="Tabuleiro"></div>
+      <p id="mensagem" class="mensagem" role="status" aria-live="polite"></p>
+      <div id="teclado" class="teclado" aria-label="Teclado"></div>
+    </section>
+
+    <section id="painel" class="painel" hidden>
+      <div class="cartao">
+        <h2>Suas estatísticas</h2>
+        <dl id="estatisticas" class="estatisticas"></dl>
+      </div>
+      <div class="cartao">
+        <h2>Ranking</h2>
+        <table>
+          <thead>
+            <tr><th>#</th><th>Jogador</th><th>Vitórias</th><th>Taxa</th><th>Média</th></tr>
+          </thead>
+          <tbody id="ranking"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
