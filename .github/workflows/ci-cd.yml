@@ -83,6 +83,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Varredura de segredos no codigo e no historico (gitleaks)
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo zricethezav/gitleaks:v8.21.2 \
+            detect --source . --redact --no-banner --exit-code 1
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -113,10 +120,14 @@ jobs:
           ECR_BACKEND: exemplo/backend
           ECR_FRONTEND: exemplo/frontend
           IMAGE_TAG: teste
+          GRAFANA_ADMIN_PASSWORD: senha-ficticia-so-para-validar
         run: |
           sudo mkdir -p /opt/termo
           sudo touch /opt/termo/infra.env /opt/termo/segredos.env
-          docker compose -f deploy/docker-compose.prod.yml config --quiet
+          docker compose \
+            -f deploy/docker-compose.prod.yml \
+            -f deploy/docker-compose.observabilidade.yml \
+            config --quiet
 
   construir:
     name: Build e push no ECR
@@ -188,8 +199,22 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Enviar pacote e executar deploy via SSM
-        run: ./scripts/enviar-deploy.sh "${{ needs.construir.outputs.tag }}"
+      - name: Obter segredos no Infisical e executar deploy via SSM
+        env:
+          INFISICAL_CLIENT_ID: ${{ secrets.INFISICAL_CLIENT_ID }}
+          INFISICAL_CLIENT_SECRET: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+          INFISICAL_PROJECT_ID: ${{ vars.INFISICAL_PROJECT_ID }}
+          INFISICAL_ENV: ${{ vars.INFISICAL_ENV }}
+          INFISICAL_URL: ${{ vars.INFISICAL_URL }}
+        run: |
+          if [ -n "${INFISICAL_CLIENT_ID}" ] && [ -n "${INFISICAL_CLIENT_SECRET}" ]; then
+            INFISICAL_ACCESS_TOKEN="$(./scripts/obter-token-infisical.sh)"
+            echo "::add-mask::${INFISICAL_ACCESS_TOKEN}"
+            export INFISICAL_ACCESS_TOKEN
+          else
+            echo "::warning::Credenciais do Infisical nao configuradas: o deploy reaproveita os segredos ja existentes na EC2."
+          fi
+          ./scripts/enviar-deploy.sh "${{ needs.construir.outputs.tag }}"
 
   verificar:
     name: Verificacao pos-deploy

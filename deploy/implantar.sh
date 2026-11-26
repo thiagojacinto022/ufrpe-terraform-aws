@@ -19,15 +19,34 @@ aguardar_provisionamento() {
   falhar "instancia nao terminou o provisionamento inicial (user_data)"
 }
 
-carregar_infra() {
+carregar_ambiente() {
   set -a
   . "$base/infra.env"
+  [ ! -f "$base/segredos.env" ] || . "$base/segredos.env"
   set +a
   export IMAGE_TAG="$1"
 }
 
 compose() {
-  docker compose -p termo -f "$1/docker-compose.prod.yml" "${@:2}"
+  docker compose -p termo \
+    -f "$1/docker-compose.prod.yml" \
+    -f "$1/docker-compose.observabilidade.yml" \
+    "${@:2}"
+}
+
+provisionar_segredos() {
+  if [ -n "${INFISICAL_ACCESS_TOKEN:-}" ]; then
+    python3 "$origem/buscar_segredos.py" "$base/segredos.env.novo"
+    mv "$base/segredos.env.novo" "$base/segredos.env"
+    chmod 600 "$base/segredos.env"
+    unset INFISICAL_ACCESS_TOKEN
+    echo "Fonte dos segredos: Infisical"
+    return 0
+  fi
+
+  [ -f "$base/segredos.env" ] || falhar "sem token do Infisical e sem $base/segredos.env"
+  echo "AVISO: token do Infisical nao informado; mantendo os segredos ja existentes na instancia" >&2
+  echo "Fonte dos segredos: arquivo existente"
 }
 
 aguardar_saude() {
@@ -50,7 +69,7 @@ voltar_versao_anterior() {
   echo "Voltando para a versao anterior ($tag_anterior)" >&2
   rm -rf "$base/atual"
   mv "$base/anterior" "$base/atual"
-  carregar_infra "$tag_anterior"
+  carregar_ambiente "$tag_anterior"
   compose "$base/atual" up -d --remove-orphans
 }
 
@@ -60,12 +79,14 @@ aguardar_provisionamento
 rm -rf "$base/novo"
 mkdir -p "$base/novo"
 cp -a "$origem"/. "$base/novo"/
+rm -f "$base/novo/implantar.sh" "$base/novo/buscar_segredos.py"
 
-carregar_infra "$tag"
+carregar_ambiente "$tag"
 docker pull "$ECR_BACKEND:$tag"
 docker pull "$ECR_FRONTEND:$tag"
 
-[ -f "$base/segredos.env" ] || falhar "$base/segredos.env ausente: os segredos ainda nao foram provisionados"
+provisionar_segredos
+carregar_ambiente "$tag"
 compose "$base/novo" config --quiet
 
 rm -rf "$base/anterior"
@@ -76,7 +97,7 @@ compose "$base/atual" up -d --remove-orphans
 
 if ! aguardar_saude; then
   compose "$base/atual" ps >&2 || true
-  compose "$base/atual" logs --tail 50 >&2 || true
+  compose "$base/atual" logs --tail 50 backend frontend >&2 || true
   voltar_versao_anterior || true
   falhar "aplicacao nao ficou saudavel em ${espera_maxima}s"
 fi

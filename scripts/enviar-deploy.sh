@@ -35,14 +35,31 @@ if [ "$status_ssm" != "Online" ]; then
   exit 1
 fi
 
+prefixo_ambiente=""
+if [ -n "${INFISICAL_ACCESS_TOKEN:-}" ]; then
+  seguro='^[A-Za-z0-9._~+/=:-]+$'
+  for variavel in INFISICAL_ACCESS_TOKEN INFISICAL_PROJECT_ID INFISICAL_ENV INFISICAL_URL; do
+    valor="${!variavel:-}"
+    if [ -z "$valor" ] && [ "$variavel" != "INFISICAL_URL" ]; then
+      echo "Com INFISICAL_ACCESS_TOKEN, a variavel ${variavel} tambem e obrigatoria." >&2
+      exit 1
+    fi
+    if [ -n "$valor" ] && ! [[ "$valor" =~ $seguro ]]; then
+      echo "Valor invalido em ${variavel}." >&2
+      exit 1
+    fi
+  done
+  prefixo_ambiente="INFISICAL_ACCESS_TOKEN='${INFISICAL_ACCESS_TOKEN}' INFISICAL_PROJECT_ID='${INFISICAL_PROJECT_ID}' INFISICAL_ENV='${INFISICAL_ENV}' INFISICAL_URL='${INFISICAL_URL:-https://app.infisical.com}' "
+fi
+
 comandos="$(jq -n \
-  --arg bucket "$bucket" --arg chave "$chave" --arg tag "$tag" \
+  --arg bucket "$bucket" --arg chave "$chave" --arg tag "$tag" --arg prefixo "$prefixo_ambiente" \
   '[
     "set -euo pipefail",
     "rm -rf /tmp/deploy-pacote && mkdir -p /tmp/deploy-pacote",
     "aws s3 cp s3://\($bucket)/\($chave) /tmp/deploy.tar.gz --only-show-errors",
     "tar -xzf /tmp/deploy.tar.gz -C /tmp/deploy-pacote",
-    "bash /tmp/deploy-pacote/implantar.sh \($tag)"
+    "\($prefixo)bash /tmp/deploy-pacote/implantar.sh \($tag)"
   ] | {commands: .}')"
 
 id_comando="$(aws ssm send-command \
@@ -53,6 +70,7 @@ id_comando="$(aws ssm send-command \
   --parameters "$comandos" \
   --query 'Command.CommandId' --output text)"
 
+unset prefixo_ambiente comandos INFISICAL_ACCESS_TOKEN
 echo "Deploy ${tag} enviado a ${instancias} (comando ${id_comando})"
 
 fim=$((SECONDS + limite_segundos + 30))
