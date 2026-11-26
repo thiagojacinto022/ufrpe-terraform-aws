@@ -1,0 +1,223 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PROJECT_NAME: webapp
+  ENVIRONMENT: dev
+  AWS_REGION: us-east-1
+
+jobs:
+  testar:
+    name: Lint e testes
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: termo_teste
+          POSTGRES_USER: termo
+          POSTGRES_PASSWORD: termo
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U termo -d termo_teste"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    defaults:
+      run:
+        working-directory: app/backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: app/backend/requirements-dev.txt
+
+      - name: Instalar dependencias
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Formatacao (ruff format)
+        run: ruff format --check .
+
+      - name: Sintaxe do frontend
+        working-directory: app/frontend/static
+        run: node --check app.js
+
+      - name: Testes unitarios e de API
+        env:
+          DB_HOST: localhost
+          DB_PORT: "5433"
+          DB_NAME: termo_teste
+          DB_USER: termo
+          DB_PASSWORD: termo
+          TOKEN_SECRET: segredo-exclusivo-dos-testes-automatizados
+        run: pytest
+
+  validar-infra:
+    name: Validar Terraform e scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
+
+      - name: terraform fmt
+        run: terraform fmt -check -recursive
+
+      - name: terraform validate (raiz)
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+
+      - name: terraform validate (bootstrap)
+        working-directory: bootstrap
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+
+      - name: Sintaxe dos scripts
+        run: |
+          for script in scripts/*.sh deploy/*.sh app/backend/docker-entrypoint.sh; do
+            bash -n "$script"
+          done
+
+      - name: Compose de producao
+        env:
+          ECR_BACKEND: exemplo/backend
+          ECR_FRONTEND: exemplo/frontend
+          IMAGE_TAG: teste
+        run: |
+          sudo mkdir -p /opt/termo
+          sudo touch /opt/termo/infra.env /opt/termo/segredos.env
+          docker compose -f deploy/docker-compose.prod.yml config --quiet
+
+  construir:
+    name: Build e push no ECR
+    needs: [testar, validar-infra]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      tag: ${{ steps.versao.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - id: versao
+        run: echo "tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Imagem do backend
+        uses: docker/build-push-action@v6
+        with:
+          context: app/backend
+          push: true
+          provenance: false
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-backend:${{ steps.versao.outputs.tag }}
+            ${{ steps.ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-backend:latest
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Imagem do frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: app/frontend
+          push: true
+          provenance: false
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-frontend:${{ steps.versao.outputs.tag }}
+            ${{ steps.ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-frontend:latest
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+  implantar:
+    name: Deploy na EC2 (SSM)
+    needs: construir
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: deploy-ec2
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Enviar pacote e executar deploy via SSM
+        run: ./scripts/enviar-deploy.sh "${{ needs.construir.outputs.tag }}"
+
+  verificar:
+    name: Verificacao pos-deploy
+    needs: implantar
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Descobrir o DNS do ALB
+        id: alb
+        run: |
+          dns="$(aws elbv2 describe-load-balancers \
+            --names "${PROJECT_NAME}-${ENVIRONMENT}-alb" \
+            --query 'LoadBalancers[0].DNSName' --output text)"
+          echo "url=http://${dns}" >> "$GITHUB_OUTPUT"
+
+      - name: Verificar /health e fluxo de jogo no ALB
+        env:
+          TENTATIVAS: "24"
+          ESPERA: "10"
+          LIMITE_REQUISICAO: "10"
+        run: ./scripts/verificar-deploy.sh "${{ steps.alb.outputs.url }}"
