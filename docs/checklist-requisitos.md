@@ -93,4 +93,9 @@ Legenda: ✅ atendido e verificado · 🟡 atendido, com ressalva descrita
 1. **Preencher a divisão de tarefas** (README, seção 5).
 2. **Configurar o Infisical** (README, seção 10): criar projeto, os 3 segredos e a machine identity; gravar
    `INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET` e as variáveis `INFISICAL_PROJECT_ID` e `INFISICAL_ENV` no GitHub.
-3. As credenciais do Learner Lab expiram: rode `./scripts/atualizar-secrets-aws.sh` a cada novo Start Lab.
+3. As credenciais do Learner Lab expiram: rode `./scripts/atualizar-secrets-aws.sh` a cada novo Start Lab,
+   antes de dar push na `main`.
+4. ✅ **Dashboard renderizado conferido no navegador** (26/11/2026, ambiente local com
+   `docker-compose.observabilidade.yml`): todos os painéis do **Termo - Visão geral** exibem dados e acompanham as
+   partidas. Na AWS, o acesso é pelo túnel `$(terraform output -raw grafana_tunnel_command)` e
+   <http://localhost:3000> (README, seção 12).
