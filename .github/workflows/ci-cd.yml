@@ -204,7 +204,7 @@ jobs:
           INFISICAL_CLIENT_ID: ${{ secrets.INFISICAL_CLIENT_ID }}
           INFISICAL_CLIENT_SECRET: ${{ secrets.INFISICAL_CLIENT_SECRET }}
           INFISICAL_PROJECT_ID: ${{ vars.INFISICAL_PROJECT_ID }}
-          INFISICAL_ENV: ${{ vars.INFISICAL_ENV }}
+          INFISICAL_ENV: ${{ vars.INFISICAL_ENV || 'prod' }}
           INFISICAL_URL: ${{ vars.INFISICAL_URL }}
         run: |
           if [ -n "${INFISICAL_CLIENT_ID}" ] && [ -n "${INFISICAL_CLIENT_SECRET}" ]; then
