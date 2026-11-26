@@ -13,7 +13,13 @@ environment  = "dev"
 aws_region   = "us-east-1"
 
 vpc_cidr      = "10.0.0.0/16"
-instance_type = "t3.micro"
+instance_type = "t3.medium"
+
+db_instance_class    = "db.t3.micro"
+db_allocated_storage = 20
+
+# A senha do banco (db_password) NÃO vai neste arquivo: informe por variável de
+# ambiente, ex.: export TF_VAR_db_password=... ou infisical run -- terraform apply.
 
 # Seu IP público com /32 (descubra em https://checkip.amazonaws.com).
 allowed_ssh_cidr = "203.0.113.10/32"

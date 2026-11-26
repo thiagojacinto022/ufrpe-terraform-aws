@@ -1,0 +1,35 @@
+#!/bin/bash
+set -euo pipefail
+
+dnf install -y docker amazon-ecr-credential-helper
+
+install -d -m 0755 /usr/local/lib/docker/cli-plugins
+compose_url="https://github.com/docker/compose/releases/download/${compose_version}/docker-compose-linux-x86_64"
+curl -fsSL -o /usr/local/lib/docker/cli-plugins/docker-compose "$compose_url"
+curl -fsSL -o /tmp/docker-compose.sha256 "$compose_url.sha256"
+echo "$(cut -d' ' -f1 /tmp/docker-compose.sha256)  /usr/local/lib/docker/cli-plugins/docker-compose" | sha256sum -c -
+chmod 0755 /usr/local/lib/docker/cli-plugins/docker-compose
+
+for home_dir in /root /home/ec2-user; do
+  install -d -m 0700 "$home_dir/.docker"
+  echo '{"credsStore":"ecr-login"}' > "$home_dir/.docker/config.json"
+done
+chown -R ec2-user:ec2-user /home/ec2-user/.docker
+
+systemctl enable --now docker
+usermod -aG docker ec2-user
+
+install -d -m 0755 -o ec2-user -g ec2-user /opt/termo
+cat > /opt/termo/infra.env <<'ENV'
+AWS_REGION=${aws_region}
+ECR_REGISTRY=${ecr_registry}
+ECR_BACKEND=${ecr_backend}
+ECR_FRONTEND=${ecr_frontend}
+DB_HOST=${db_host}
+DB_PORT=${db_port}
+DB_NAME=${db_name}
+DB_USER=${db_user}
+ENV
+chmod 0644 /opt/termo/infra.env
+
+touch /opt/termo/.provisionado

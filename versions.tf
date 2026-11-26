@@ -9,9 +9,9 @@
 # -----------------------------------------------------------------------------
 
 terraform {
-  # Versão mínima do binário do Terraform. A 1.5 trouxe recursos que uso
-  # aqui (ex.: blocos `check`/`import` e melhorias em validation).
-  required_version = ">= 1.5"
+  # Versão mínima do binário do Terraform. A 1.10 é exigida pelo backend S3
+  # com `use_lockfile` (lock no próprio bucket, sem DynamoDB).
+  required_version = ">= 1.10"
 
   required_providers {
     aws = {

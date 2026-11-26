@@ -31,12 +31,42 @@ output "web_public_ip" {
   value       = aws_instance.web.public_ip
 }
 
-output "web_url" {
-  description = "URL para testar o nginx no navegador."
-  value       = "http://${aws_instance.web.public_dns}"
+output "alb_dns_name" {
+  description = "DNS do Application Load Balancer."
+  value       = aws_lb.app.dns_name
+}
+
+output "app_url" {
+  description = "URL pública da aplicação, pelo ALB."
+  value       = "http://${aws_lb.app.dns_name}"
 }
 
 output "ssh_command" {
   description = "Comando pronto para acessar a instância (chave labsuser.pem do Learner Lab)."
   value       = "ssh -i labsuser.pem ec2-user@${aws_instance.web.public_ip}"
+}
+
+output "grafana_tunnel_command" {
+  description = "Túnel SSH para abrir o Grafana em http://localhost:3000."
+  value       = "ssh -i labsuser.pem -L 3000:localhost:3000 ec2-user@${aws_instance.web.public_ip}"
+}
+
+output "ecr_backend_url" {
+  description = "URL do repositório ECR do backend."
+  value       = aws_ecr_repository.app["backend"].repository_url
+}
+
+output "ecr_frontend_url" {
+  description = "URL do repositório ECR do frontend."
+  value       = aws_ecr_repository.app["frontend"].repository_url
+}
+
+output "db_endpoint" {
+  description = "Endpoint do RDS (host:porta)."
+  value       = aws_db_instance.main.endpoint
+}
+
+output "db_address" {
+  description = "Host do RDS, sem a porta."
+  value       = aws_db_instance.main.address
 }

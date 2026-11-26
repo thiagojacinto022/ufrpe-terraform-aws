@@ -60,7 +60,7 @@ module "vpc" {
 
 resource "aws_security_group" "web" {
   name        = "${local.name_prefix}-web-sg"
-  description = "Permite HTTP publico e SSH apenas do IP autorizado"
+  description = "Permite HTTP apenas do ALB e SSH apenas do IP autorizado"
   vpc_id      = module.vpc.vpc_id
 
   tags = {
@@ -78,18 +78,17 @@ resource "aws_vpc_security_group_ingress_rule" "ssh" {
   to_port           = 22
 }
 
-# HTTP (80) aberto para qualquer um: é um servidor web público.
 resource "aws_vpc_security_group_ingress_rule" "http" {
-  security_group_id = aws_security_group.web.id
-  description       = "HTTP publico"
-  cidr_ipv4         = "0.0.0.0/0"
-  ip_protocol       = "tcp"
-  from_port         = 80
-  to_port           = 80
+  security_group_id            = aws_security_group.web.id
+  description                  = "HTTP somente do ALB"
+  referenced_security_group_id = aws_security_group.alb.id
+  ip_protocol                  = "tcp"
+  from_port                    = 80
+  to_port                      = 80
 }
 
-# Saída liberada: a instância precisa baixar pacotes (dnf) e atualizações.
-# ip_protocol "-1" significa "todos os protocolos e portas".
+# Saída liberada: sem NAT Gateway, a instância precisa chegar sozinha ao ECR,
+# ao SSM e aos repositórios de pacotes. ip_protocol "-1" = todos os protocolos.
 resource "aws_vpc_security_group_egress_rule" "all" {
   security_group_id = aws_security_group.web.id
   description       = "Saida liberada para a internet"
@@ -122,18 +121,31 @@ resource "aws_instance" "web" {
     http_tokens   = "required"
   }
 
-  # Script executado uma única vez no primeiro boot: instala e sobe o nginx,
-  # para a porta 80 ter algo a responder e eu conseguir testar no navegador.
-  user_data = <<-EOF
-    #!/bin/bash
-    dnf install -y nginx
-    echo "<h1>${local.name_prefix}: provisionado com Terraform</h1>" > /usr/share/nginx/html/index.html
-    systemctl enable --now nginx
-  EOF
+  user_data = templatefile("${path.module}/templates/user_data.sh.tftpl", {
+    compose_version = var.compose_version
+    aws_region      = var.aws_region
+    ecr_registry    = split("/", aws_ecr_repository.app["backend"].repository_url)[0]
+    ecr_backend     = aws_ecr_repository.app["backend"].repository_url
+    ecr_frontend    = aws_ecr_repository.app["frontend"].repository_url
+    db_host         = aws_db_instance.main.address
+    db_port         = aws_db_instance.main.port
+    db_name         = var.db_name
+    db_user         = var.db_username
+  })
 
   # Se eu mudar o user_data, a instância é recriada (o script só roda no
   # primeiro boot, então mudar sem recriar não teria efeito nenhum).
   user_data_replace_on_change = true
+
+  root_block_device {
+    volume_type = "gp3"
+    volume_size = 20
+    encrypted   = true
+  }
+
+  lifecycle {
+    ignore_changes = [ami]
+  }
 
   tags = {
     Name = "${local.name_prefix}-web"
