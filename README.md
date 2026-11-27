@@ -323,7 +323,14 @@ Os segredos gerenciados são `DB_PASSWORD`, `TOKEN_SECRET` (chave de assinatura 
    caracteres, sem espaço e sem `/ @ " ' \`.
 2. Em **Access Control → Machine Identities**, crie uma identidade com **Universal Auth**, defina o *Access Token TTL*
    curto (ex.: 300 s) e dê a ela acesso de **leitura** ao projeto.
-3. No GitHub:
+3. No GitHub, o caminho mais simples é o script, que pergunta os valores (o secret não é exibido), **valida o login
+   e a leitura dos 3 segredos no Infisical** e só então grava os secrets e as variáveis:
+
+   ```bash
+   ./scripts/configurar-infisical-github.sh            # use --simular para validar sem gravar
+   ```
+
+   Ou, manualmente:
 
    ```bash
    gh secret set INFISICAL_CLIENT_ID          # cole o client id
