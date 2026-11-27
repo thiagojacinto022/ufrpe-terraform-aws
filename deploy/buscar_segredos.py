@@ -52,9 +52,22 @@ def consultar(url: str, token: str) -> dict:
 
 def extrair(resposta: dict) -> dict[str, str]:
     encontrados = {item["secretKey"]: item["secretValue"] for item in resposta.get("secrets", [])}
+    ambiente = os.environ.get("INFISICAL_ENV", "prod")
+    caminho = os.environ.get("INFISICAL_SECRET_PATH", "/")
+
+    if not encontrados:
+        sys.exit(
+            f"Nenhum segredo encontrado no ambiente '{ambiente}' (caminho '{caminho}') deste projeto. "
+            "Confira se os segredos foram salvos neste ambiente (Development, Staging ou Production) "
+            "e se o Project ID e o slug do ambiente estao certos."
+        )
+
     ausentes = [chave for chave in CHAVES_OBRIGATORIAS if not encontrados.get(chave)]
     if ausentes:
-        sys.exit(f"Segredos ausentes no Infisical: {', '.join(ausentes)}")
+        sys.exit(
+            f"Segredos ausentes no ambiente '{ambiente}': {', '.join(ausentes)}. "
+            f"Nomes encontrados: {', '.join(sorted(encontrados))}"
+        )
 
     invalidos = [chave for chave in CHAVES_OBRIGATORIAS if not VALOR_SEGURO.match(encontrados[chave])]
     if invalidos:
